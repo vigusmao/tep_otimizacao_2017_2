@@ -1,3 +1,5 @@
+from time import time
+
 def inicializar_grafo(n):
     G = [None] * (n+1)
     pesos = {}
@@ -111,12 +113,16 @@ def busca_profundidade(G, raiz, buscado):
 
         return False
 
-
     n = len(G) - 1
     pais = [None] * (n+1)
     pais[raiz] = raiz
-    
-    return busca(G, raiz, buscado, [raiz], pais)
+
+    caminho = [raiz]
+    busca(G, raiz, buscado, caminho, pais)
+
+    if caminho[-1] == buscado:
+        return caminho
+    return None
     
 
 def aumentar_fluxo(origem, destino, delta, fluxos):
@@ -124,15 +130,18 @@ def aumentar_fluxo(origem, destino, delta, fluxos):
 
     if fluxo_contrario > 0:
         diminuicao = min(fluxo_contrario, delta)
-        fluxos[(destino, origem)] -= diminuicao
+        novo_fluxo_contrario = fluxo_contrario - diminuicao
+        if novo_fluxo_contrario == 0:
+            fluxos.pop((destino, origem))
+        else:
+            fluxos[(destino, origem)] = novo_fluxo_contrario
         delta -= diminuicao
 
-    fluxos[(origem, destino)] += delta
+    if delta > 0:
+        fluxos[(origem, destino)] = fluxos.get((origem, destino), 0) + delta
 
 
 def criar_rede_residual_inicial(G, capacidades):
-##    rede_residual = [set(G[v]) if G[v] is not None else None
-##                     for v in range(1, n+1)]
     n = len(G) - 1
     rede_residual = [None] * (n+1)
     for v in range(1, n+1):
@@ -173,58 +182,19 @@ def atualizar_rede_residual(origem, destino, rede_residual,
 
 
 def edmonds_karp(G, capacidades, produtor, consumidor):
-    f = 0
-    fluxos = {aresta : 0 for aresta in capacidades}
-    
-    rede_residual, capacidades_rede = criar_rede_residual_inicial(
-        G, capacidades)
-
-    while True:
-
-        caminho_aumentante = busca_largura(
-            rede_residual, produtor, consumidor)
-
-        # se nao existir, interrompe
-        if caminho_aumentante is None:
-            break
-
-        # encontra o gargalo do caminho aumentante
-        delta = -1  # capacidade do gargalo
-        for indice in range(len(caminho_aumentante) - 1):
-            # aresta x-->y
-            x = caminho_aumentante[indice]
-            y = caminho_aumentante[indice + 1]
-            capacidade_xy = capacidades_rede[(x,y)]
-            if delta == -1 or \
-               capacidade_xy < delta:
-                delta = capacidade_xy
-
-        # atualiza o fluxo e a rede, usando o caminho aumentante
-        f += delta
-        for indice in range(len(caminho_aumentante) - 1):
-            # aresta x-->y
-            x = caminho_aumentante[indice]
-            y = caminho_aumentante[indice + 1]
-            aumentar_fluxo(x, y, delta, fluxos)
-
-            atualizar_rede_residual(
-                x, y, rede_residual, capacidades_rede,
-                capacidades, fluxos)
-
-    return f, fluxos
+    return ford_fulkerson(G, capacidades, produtor, consumidor, busca_largura)
             
 
-def ford_fulkerson(G, capacidades, produtor, consumidor):
+def ford_fulkerson(G, capacidades, produtor, consumidor, funcao_busca=busca_profundidade):
     f = 0
-    fluxos = {aresta : 0 for aresta in capacidades}
+    fluxos = {}
     
     rede_residual, capacidades_rede = criar_rede_residual_inicial(
         G, capacidades)
 
     while True:
 
-        caminho_aumentante = busca_profundidade(
-            rede_residual, produtor, consumidor)
+        caminho_aumentante = funcao_busca(rede_residual, produtor, consumidor)
 
         # se nao existir, interrompe
         if caminho_aumentante is None:
@@ -274,40 +244,26 @@ def teste():
     atualizar_rede_residual(1, 2, rede, cap_rede, capacidades, fluxos)
     atualizar_rede_residual(2, 4, rede, cap_rede, capacidades, fluxos)
 
-            
+
+def executar_com_relogio(funcao, parametros):
+    start = time()
+    fluxo_maximo, fluxos = funcao(*parametros)
+    duracao = time() - start
+    print(funcao.__name__)
+    print("[duracao: %.6f segundos]" % duracao) 
+    print("fluxo maximo = %d" % fluxo_maximo)
+    for aresta, fluxo in fluxos.items():
+        print("fluxo(%d,%d) = %d" % (aresta[0], aresta[1], fluxo))
+    print()
+    
 
 # Main
 G, capacidades = inicializar_grafo(4)
-adicionar_aresta(1, 2, 10**1, G, capacidades)
-adicionar_aresta(2, 4, 10**1, G, capacidades)
-adicionar_aresta(1, 3, 10**1, G, capacidades)
-adicionar_aresta(3, 4, 10**1, G, capacidades)
+adicionar_aresta(1, 2, 10**19, G, capacidades)
+adicionar_aresta(2, 4, 10**19, G, capacidades)
+adicionar_aresta(1, 3, 10**19, G, capacidades)
+adicionar_aresta(3, 4, 10**19, G, capacidades)
 adicionar_aresta(2, 3, 1, G, capacidades)
 
-fluxo_maximo, fluxos = ford_fulkerson(G, capacidades, 1, 4)
-
-print("fluxo maximo = %d" % fluxo_maximo)
-for aresta, fluxo in fluxos.items():
-    print("fluxo(%d,%d) = %d" % (aresta[0], aresta[1], fluxo))
-
-        
-
-    
-    
-
-
-
-
-    
-
-    
-
-                
-        
-        
-    
-    
-                
-    
-    
-    
+executar_com_relogio(ford_fulkerson, (G, capacidades, 1, 4))
+executar_com_relogio(edmonds_karp, (G, capacidades, 1, 4))
